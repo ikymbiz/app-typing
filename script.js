@@ -107,84 +107,69 @@
     currentSession = null;
     save();
     const expPercent = Math.min(100, (saveData.exp / nextExp()) * 100);
-    const unlocked = LINE_DATA.filter(line => saveData.level >= line.unlockLevel).length;
+    const quickLine = LINE_DATA.find(line => saveData.level >= line.unlockLevel && line.id !== "review") || LINE_DATA[0];
+
     app.innerHTML = `
-      <section class="hero">
-        <div class="hero-grid">
-          <div>
-            <h1>かなうち電鉄</h1>
-            <p>ひらがな・単語・文章をローマ字で入力して、電車を定刻運行させよう。Lv.100の「でんせつの運転士」を目指すタイピング学習ゲームです。</p>
-            <div class="btn-row">
-              <button class="btn" data-action="lines">路線をえらぶ</button>
-              <button class="btn secondary" data-action="guide">ローマ字案内</button>
-              <button class="btn secondary" data-action="settings">音設定</button>
-            </div>
+      <section class="home-simple-v2">
+        <div class="home-rail-card">
+          <div class="home-title-block">
+            <span class="eyebrow">かなうち電鉄</span>
+            <h1>ローマ字で<br>電車を走らせよう</h1>
+            <p>見えた文字だけを打つ。正解すると駅に定刻到着します。</p>
           </div>
-          <div class="train-card" aria-hidden="true">
-            <div class="train-front">
-              <div class="train-window-row"><span class="train-window"></span><span class="train-window"></span><span class="train-window"></span></div>
-              <div class="train-display">定刻運行</div>
+
+          <div class="home-train-demo" aria-hidden="true">
+            <div class="home-sky"></div>
+            <div class="home-train">
+              <span class="home-train-window"></span>
+              <span class="home-train-window"></span>
+              <span class="home-train-door"></span>
             </div>
+            <div class="home-rail"></div>
+          </div>
+
+          <div class="home-status-mini">
+            <strong>Lv.${saveData.level} ${escapeHtml(saveData.title)}</strong>
+            <span>EXP ${saveData.exp} / ${nextExp()}</span>
+            <div class="progress" aria-label="EXP"><span style="--value:${expPercent}%"></span></div>
+          </div>
+
+          <div class="home-actions-v2">
+            <button class="btn primary-huge" data-action="quick">つづきから発車</button>
+            <button class="btn secondary" data-action="guide">ローマ字表</button>
+            <button class="btn secondary" data-action="settings">設定</button>
           </div>
         </div>
       </section>
 
-      <section class="grid two" style="margin-top:16px">
-        <article class="card">
-          <div class="section-title" style="margin-top:0"><h2>運転士ステータス</h2><span class="pill gold">${saveData.title}</span></div>
-          <table class="stat-table">
-            <tr><th>運転士レベル</th><td>Lv.${saveData.level}</td></tr>
-            <tr><th>EXP</th><td>${saveData.exp} / ${nextExp()}</td></tr>
-            <tr><th>総運行ポイント</th><td>${saveData.totalScore.toLocaleString()}</td></tr>
-            <tr><th>最高運行ポイント</th><td>${saveData.bestScore.toLocaleString()}</td></tr>
-            <tr><th>開放路線</th><td>${unlocked} / ${LINE_DATA.length}</td></tr>
-            <tr><th>最大連続定刻</th><td>${saveData.maxComboEver}駅</td></tr>
-          </table>
-          <div class="progress" aria-label="EXP"><span style="--value:${expPercent}%"></span></div>
-        </article>
-        <article class="card">
-          <div class="section-title" style="margin-top:0"><h2>バッジ</h2><span class="pill">${saveData.badges.length} / ${BADGE_DEFINITIONS.length}</span></div>
-          <div class="badge-grid">
-            ${BADGE_DEFINITIONS.map(badge => `<span class="badge ${saveData.badges.includes(badge.name) ? "" : "locked-badge"}" title="${escapeHtml(badge.description)}">${escapeHtml(badge.name)}</span>`).join("")}
-          </div>
-        </article>
+      <section class="card simple-line-list line-list-v2">
+        <div class="section-title" style="margin-top:0">
+          <h2>路線をえらぶ</h2>
+          <span class="small">発車を押すだけ</span>
+        </div>
+        <div class="simple-lines">
+          ${LINE_DATA.map(renderLineCard).join("")}
+        </div>
       </section>
-
-      <div class="section-title"><h2>路線をえらぶ</h2><span class="small">発車すると運行が始まります</span></div>
-      <section class="grid three">${LINE_DATA.map(renderLineCard).join("")}</section>
     `;
 
-    app.querySelector('[data-action="lines"]').addEventListener("click", () => {
-      app.querySelector(".section-title")?.scrollIntoView({ behavior: "smooth" });
-    });
+    app.querySelector('[data-action="quick"]').addEventListener("click", () => startLine(quickLine.id));
     app.querySelector('[data-action="guide"]').addEventListener("click", renderGuide);
     app.querySelector('[data-action="settings"]').addEventListener("click", renderSettings);
     app.querySelectorAll("[data-line-id]").forEach(button => {
-      button.addEventListener("click", () => renderLineDetail(button.dataset.lineId));
+      button.addEventListener("click", () => startLine(button.dataset.lineId));
     });
   }
 
   function renderLineCard(line) {
     const locked = saveData.level < line.unlockLevel;
-    const best = saveData.lineBest[line.id];
-    const stars = saveData.lineStars[line.id] || 0;
     return `
-      <article class="card line-card ${locked ? "locked" : ""}">
-        <div class="line-head">
-          <div>
-            <div class="line-icon">${line.icon}</div>
-            <h3>${escapeHtml(line.name)}</h3>
-          </div>
-          <span class="pill ${locked ? "red" : "green"}">${locked ? `🔒 Lv.${line.unlockLevel}` : "開放中"}</span>
+      <article class="simple-line simple-line-v2 ${locked ? "locked" : ""}">
+        <div class="simple-line-main">
+          <strong>${line.icon} ${escapeHtml(line.name)}</strong>
+          <small>${locked ? `Lv.${line.unlockLevel}で開放` : `${escapeHtml(line.description || line.difficulty)}`}</small>
         </div>
-        <div class="pill-row">
-          <span class="pill">${escapeHtml(line.difficulty)}</span>
-          <span class="pill">${escapeHtml(line.role)}</span>
-          <span class="pill gold">★ ${stars}</span>
-        </div>
-        <p class="meta">${escapeHtml(line.description)}</p>
-        <p class="small">最高評価：${best ? `${best.grade} / ${best.score.toLocaleString()}pt` : "未運行"}</p>
-        <button class="btn ${locked ? "secondary" : ""}" data-line-id="${line.id}" ${locked ? "disabled" : ""}>${locked ? "まだ発車できません" : "路線を見る"}</button>
+        <button class="btn ${locked ? "secondary" : ""}" data-line-id="${line.id}" ${locked ? "disabled" : ""}>${locked ? "まだ" : "発車"}</button>
       </article>
     `;
   }
@@ -282,62 +267,91 @@
     const s = currentSession;
     const problem = s.problems[s.index];
     const hidden = s.line.source === "listening" || (s.line.id === "legend" && problem.type === "listening");
-    const displayText = hidden && !s.answerShown ? "車内アナウンスを聞いて入力" : (problem.label || problem.kana);
+    const displayText = hidden && !s.answerShown ? "きいて入力" : (problem.label || problem.kana);
+    const comboClass = s.combo >= 10 ? "combo10" : s.combo >= 5 ? "combo5" : s.combo >= 3 ? "combo3" : "";
+
     app.innerHTML = `
-      <section class="play-layout">
-        <div class="station-board">
+      <section class="drive-screen-v2">
+        <div class="drive-header-v2">
           <div>
-            <div class="board-top">
-              <div>
-                <div class="board-line">${escapeHtml(s.line.name)}</div>
-                <div>${s.index + 1}駅目 / ${s.problems.length}駅</div>
-              </div>
-              <button class="btn secondary" id="abortRun">運行中止</button>
-            </div>
-            <div class="station-name ${hidden && !s.answerShown ? "hidden-answer" : ""}">${escapeHtml(displayText)}${hidden && !s.answerShown ? "" : "駅"}</div>
-            <div class="answer-hint" id="answerHint">${buildHintText(problem, s)}</div>
-            <input class="input-box" id="typingInput" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="latin" placeholder="ローマ字で入力" />
-            <div class="feedback" id="feedback"></div>
+            <div class="board-line">${escapeHtml(s.line.name)}</div>
+            <strong>${s.index + 1} / ${s.problems.length}</strong>
           </div>
-          <div>
-            <div class="announcement-box" id="announcementBox">アナウンスを準備しています。</div>
-            <div class="btn-row" id="listeningButtons" style="${hidden ? "" : "display:none"}">
-              <button class="btn ghost" id="replayAudio">もう一度聞く</button>
-              <button class="btn ghost" id="showHint">ヒント表示</button>
-              <button class="btn ghost" id="showAnswer">答えを見る</button>
-            </div>
+          <div class="drive-chip-row">
+            <span class="drive-chip">遅延 <b id="delayValue">${s.delay}分</b></span>
+            <span class="drive-chip">連続 <b id="comboMeter">${s.combo}</b></span>
+            <span class="drive-chip time">残り <b id="timeValue">${s.remaining}秒</b></span>
           </div>
+          <button class="btn secondary small-btn" id="abortRun">中止</button>
         </div>
-        <aside class="card">
-          <h2>運行状況</h2>
-          <div class="gauge-grid" style="margin-top:16px">
-            <div class="gauge"><small>連続定刻</small><strong id="comboValue">${s.combo}</strong></div>
-            <div class="gauge"><small>遅延</small><strong id="delayValue">${s.delay}分</strong></div>
-            <div class="gauge"><small>運行ポイント</small><strong id="scoreValue">${s.score}</strong></div>
-            <div class="gauge"><small>残り時間</small><strong id="timeValue">${s.remaining}秒</strong></div>
+
+        <div class="route-map-v2" aria-label="路線マップ">
+          ${renderRouteMap(s)}
+        </div>
+
+        <div class="train-stage ${comboClass}" id="trainStage" style="--train-x:6%;">
+          <div class="moving-sky" aria-hidden="true">
+            <span class="hill h1"></span>
+            <span class="hill h2"></span>
+            <span class="pole p1"></span>
+            <span class="pole p2"></span>
+            <span class="cloud c1"></span>
+            <span class="cloud c2"></span>
           </div>
-          <div style="margin-top:16px">
-            <div class="small">正解候補</div>
-            <div class="romaji-list">${hidden && !s.answerShown ? `<span class="pill">聞き取り中：正解候補は非表示</span>` : problem.answers.slice(0, 10).map(answer => `<span class="romaji-chip">${escapeHtml(answer)}</span>`).join("")}${(!hidden || s.answerShown) && problem.answers.length > 10 ? `<span class="pill">ほか ${problem.answers.length - 10}</span>` : ""}</div>
-            <p class="small">入力中に間違った文字が入ると「遅延 +1分」です。<span class="kbd">Esc</span> で運行中止。</p>
+          <div class="station-platform" aria-hidden="true">
+            <span class="station-sign">駅</span>
           </div>
-        </aside>
+          <div class="track-bed" aria-hidden="true"></div>
+          <div class="rail-train" id="railTrain" aria-hidden="true">
+            <div class="train-car front-car">
+              <span class="train-window"></span>
+              <span class="train-window"></span>
+              <span class="train-door"></span>
+            </div>
+            <div class="train-car back-car">
+              <span class="train-window"></span>
+              <span class="train-window"></span>
+            </div>
+            <span class="wheel w1"></span>
+            <span class="wheel w2"></span>
+            <span class="wheel w3"></span>
+          </div>
+          <div class="event-bubble" id="eventBubble"></div>
+        </div>
+
+        <div class="question-panel-v2">
+          <div class="question-label-v2">お題</div>
+          <div class="big-question ${hidden && !s.answerShown ? "hidden-answer" : ""}">${escapeHtml(displayText)}</div>
+          <input class="input-box simple-input" id="typingInput" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="latin" placeholder="ローマ字で入力" />
+          <div class="answer-hint simple-hint" id="answerHint"></div>
+          <div class="feedback" id="feedback"></div>
+
+          <div class="btn-row compact-buttons">
+            <button class="btn ghost" id="showTypingHint">ヒント</button>
+            <button class="btn ghost" id="replayAudio" style="${hidden ? "" : "display:none"}">もう一度聞く</button>
+            <button class="btn ghost" id="showAnswer" style="${hidden ? "" : "display:none"}">答え</button>
+          </div>
+          <div class="announcement-box simple-announcement" id="announcementBox" aria-live="polite"></div>
+          <span id="scoreValue" hidden>${s.score}</span>
+          <span id="comboValue" hidden>${s.combo}</span>
+        </div>
       </section>
     `;
 
     document.getElementById("abortRun").addEventListener("click", () => {
       stopTimer();
       stopTrainLoop();
-      renderLineDetail(s.line.id);
+      renderHome();
     });
     const input = document.getElementById("typingInput");
     input.addEventListener("input", handleTyping);
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") handleEnterSubmit();
     });
+    document.getElementById("showTypingHint")?.addEventListener("click", showTypingHint);
     document.getElementById("replayAudio")?.addEventListener("click", () => replayListening(problem));
-    document.getElementById("showHint")?.addEventListener("click", () => showListeningHint(problem));
     document.getElementById("showAnswer")?.addEventListener("click", () => revealListeningAnswer(problem));
+    setTrainProgress(0);
     setTimeout(() => input.focus(), 0);
   }
 
@@ -373,9 +387,12 @@
     s.currentInput = value;
 
     if (!value) {
+      setTrainProgress(0);
       setFeedback("", "");
       return;
     }
+
+    updateTrainProgress(value, problem);
 
     if (problem.answers.includes(value)) {
       handleCorrect(value);
@@ -386,7 +403,7 @@
     if (!validPrefix) {
       handleMistype(input, problem);
     } else {
-      setFeedback("そのまま入力しよう", "warn");
+      setFeedback("", "");
     }
   }
 
@@ -396,6 +413,7 @@
     const input = document.getElementById("typingInput");
     const problem = s.problems[s.index];
     const value = normalizeInput(input.value);
+    updateTrainProgress(value, problem);
     if (problem.answers.includes(value)) handleCorrect(value);
     else handleMistype(input, problem);
   }
@@ -431,12 +449,15 @@
     else markKnownCorrect(problem);
 
     updateRunMeters();
+    setTrainProgress(100);
+    setTrainEvent("arrived", "定刻到着！");
+    showCorrectHint(problem, typed);
     playEffect("correct");
     const comboKey = s.combo >= 20 ? "combo20" : s.combo >= 10 ? "combo10" : s.combo >= 5 ? "combo5" : s.combo >= 3 ? "combo3" : "default";
     speakAnnouncement("correct", comboKey, { combo: s.combo, score: s.score, delay: s.delay });
-    setFeedback(`定刻到着！ +${point}ポイント / +${expGain}EXP`, "ok");
+    setFeedback("定刻到着！", "ok");
 
-    setTimeout(nextStationOrFinish, 650);
+    setTimeout(nextStationOrFinish, 900);
   }
 
   function handleMistype(input, problem) {
@@ -450,12 +471,16 @@
     input.value = "";
     s.currentInput = "";
     updateRunMeters();
+    setTrainProgress(0);
+    setTrainEvent("delayed", "遅延 +1分");
     playEffect("miss");
     speakAnnouncement("miss", "default", { delay: s.delay });
-    setFeedback("入力ミス！ 遅延 +1分。もう一度入力しよう", "bad");
+    setFeedback("遅延 +1分", "bad");
     if (s.delay >= 10) {
       stopTimer();
-      setTimeout(() => finishRun(false), 600);
+      setTimeout(() => finishRun(false), 850);
+    } else {
+      setTimeout(clearTrainEvent, 520);
     }
   }
 
@@ -471,11 +496,13 @@
     saveData.totalMiss += 1;
     addWeakItem(problem, s.line.id);
     updateRunMeters();
+    setTrainProgress(120);
+    setTrainEvent("passing", "通過！");
     playEffect("miss");
     speakAnnouncement("timeout", "default", { delay: s.delay });
     setFeedback("通過してしまった！ 遅延 +3分", "bad");
-    if (s.delay >= 10) setTimeout(() => finishRun(false), 700);
-    else setTimeout(nextStationOrFinish, 900);
+    if (s.delay >= 10) setTimeout(() => finishRun(false), 1000);
+    else setTimeout(nextStationOrFinish, 1150);
   }
 
   function nextStationOrFinish() {
@@ -617,6 +644,7 @@
     const s = currentSession;
     if (!s) return;
     setText("comboValue", s.combo);
+    setText("comboMeter", s.combo);
     setText("delayValue", `${s.delay}分`);
     setText("scoreValue", s.score);
     setText("timeValue", `${s.remaining}秒`);
@@ -1041,6 +1069,72 @@
     const primary = problem.answers[0] || "";
     const alt = problem.answers.slice(1, 4).join(" / ");
     return `${primary}${alt ? ` / ${alt} どちらでもOK` : ""}${problem.note ? `｜${problem.note}` : ""}`;
+  }
+
+
+  function renderRouteMap(session) {
+    const total = session.problems.length;
+    const maxDots = Math.min(total, 12);
+    const dots = [];
+    for (let i = 0; i < maxDots; i += 1) {
+      const actualIndex = Math.round((i / Math.max(1, maxDots - 1)) * (total - 1));
+      const state = actualIndex < session.index ? "done" : actualIndex === session.index ? "current" : "todo";
+      dots.push(`<span class="route-dot ${state}" aria-hidden="true"></span>`);
+    }
+    return dots.join('<span class="route-line" aria-hidden="true"></span>');
+  }
+
+  function updateTrainProgress(value, problem) {
+    setTrainProgress(getInputProgress(value, problem));
+  }
+
+  function getInputProgress(value, problem) {
+    if (!value || !problem) return 0;
+    let best = 0;
+    for (const answer of problem.answers) {
+      if (answer.startsWith(value)) best = Math.max(best, value.length / answer.length);
+    }
+    return clamp(best * 100, 0, 100);
+  }
+
+  function setTrainProgress(percent) {
+    const stage = document.getElementById("trainStage");
+    if (!stage) return;
+    const x = percent > 100 ? 106 : 6 + clamp(percent, 0, 100) * 0.78;
+    stage.style.setProperty("--train-x", `${x}%`);
+  }
+
+  function setTrainEvent(type, message = "") {
+    const stage = document.getElementById("trainStage");
+    const bubble = document.getElementById("eventBubble");
+    if (!stage) return;
+    stage.classList.remove("arrived", "delayed", "passing");
+    if (type) stage.classList.add(type);
+    if (bubble) bubble.textContent = message;
+  }
+
+  function clearTrainEvent() {
+    const stage = document.getElementById("trainStage");
+    const bubble = document.getElementById("eventBubble");
+    if (stage) stage.classList.remove("arrived", "delayed", "passing");
+    if (bubble) bubble.textContent = "";
+  }
+
+  function showCorrectHint(problem, typed) {
+    const hint = document.getElementById("answerHint");
+    if (!hint || !problem) return;
+    const shown = [typed, ...problem.answers.filter(answer => answer !== typed)].slice(0, 4);
+    hint.textContent = `入力OK：${shown.join(" / ")}`;
+  }
+
+  function showTypingHint() {
+    const s = currentSession;
+    if (!s || s.finished) return;
+    const problem = s.problems[s.index];
+    s.hintShown = true;
+    const hint = document.getElementById("answerHint");
+    if (hint) hint.textContent = buildHintText(problem, s);
+    speakAnnouncement("listening", "hint", {});
   }
 
   function stopTimer() {
