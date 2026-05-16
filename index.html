@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>かなうち電鉄</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <button class="brand" id="homeButton" type="button" aria-label="ホームへ戻る">
+        <span class="logo-mark">か</span>
+        <span>
+          <strong>かなうち電鉄</strong>
+          <small>ローマ字タイピング運行ゲーム</small>
+        </span>
+      </button>
+      <div class="status-pill" id="topStatus">読み込み中...</div>
+    </header>
+
+    <main id="app" class="main" aria-live="polite"></main>
+  </div>
+
+  <template id="toastTemplate">
+    <div class="toast"></div>
+  </template>
+  <div id="toastArea" class="toast-area" aria-live="assertive"></div>
+
+  <script src="data/kana-data.js"></script>
+  <script src="data/word-data.js"></script>
+  <script src="data/sentence-data.js"></script>
+  <script src="data/line-data.js"></script>
+  <script src="data/announcements.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
