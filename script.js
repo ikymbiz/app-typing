@@ -44,6 +44,12 @@
   let currentSession = null;
   let timerId = null;
   let trainLoopAudio = null;
+  let audioUnlocked = false;
+  let audioContext = null;
+  const activeAudioSet = new Set();
+
+  document.addEventListener("pointerdown", unlockAudioPlayback, { once: true, capture: true });
+  document.addEventListener("keydown", unlockAudioPlayback, { once: true, capture: true });
 
   homeButton.addEventListener("click", () => {
     stopTimer();
@@ -196,7 +202,7 @@
         <div class="grid three">
           <div class="card flat"><strong>開放レベル</strong><p>Lv.${line.unlockLevel}</p></div>
           <div class="card flat"><strong>難易度</strong><p>${escapeHtml(line.difficulty)}</p></div>
-          <div class="card flat"><strong>駅数 / 制限時間</strong><p>${line.stationCount}駅 / ${line.timeLimit}秒</p></div>
+          <div class="card flat"><strong>駅数 / 制限時間</strong><p>${line.stationCount}駅 / ${formatLineTimeLimit(line)}</p></div>
         </div>
         <div class="grid two" style="margin-top:16px">
           <div class="card flat">
@@ -221,6 +227,7 @@
   }
 
   function startLine(lineId) {
+    unlockAudioPlayback();
     const line = getLine(lineId);
     if (!line || saveData.level < line.unlockLevel) return;
 
@@ -245,10 +252,10 @@
       startedAt: Date.now(),
       finished: false,
       currentInput: "",
-      hintShown: false,
+      hintShown: true,
       answerShown: false,
       stationStartedAt: Date.now(),
-      remaining: line.timeLimit
+      remaining: getInitialRemaining(line)
     };
 
     saveData.playCount += 1;
@@ -280,7 +287,7 @@
           <div class="drive-chip-row">
             <span class="drive-chip">遅延 <b id="delayValue">${s.delay}分</b></span>
             <span class="drive-chip">連続 <b id="comboMeter">${s.combo}</b></span>
-            <span class="drive-chip time">残り <b id="timeValue">${s.remaining}秒</b></span>
+            <span class="drive-chip time">${hasTimeLimit(s.line) ? "残り" : "時間"} <b id="timeValue">${formatRemainingTime(s)}</b></span>
           </div>
           <button class="btn secondary small-btn" id="abortRun">中止</button>
         </div>
@@ -359,21 +366,24 @@
     const s = currentSession;
     if (!s || s.finished) return;
     s.currentInput = "";
-    s.hintShown = false;
+    s.hintShown = true;
     s.answerShown = false;
-    s.remaining = s.line.timeLimit;
+    s.remaining = getInitialRemaining(s.line);
     s.stationStartedAt = Date.now();
     const problem = s.problems[s.index];
+    showInitialHint(problem, s);
+    updateRunMeters();
     const stationName = problem.label || problem.kana;
     speakAnnouncement("nextStation", "default", { station: stationName, line: s.line.name });
     if (problem.type === "listening") {
       setTimeout(() => replayListening(problem, true), 350);
     }
     stopTimer();
+    if (!hasTimeLimit(s.line)) return;
     timerId = setInterval(() => {
       s.remaining -= 1;
       const timeEl = document.getElementById("timeValue");
-      if (timeEl) timeEl.textContent = `${s.remaining}秒`;
+      if (timeEl) timeEl.textContent = formatRemainingTime(s);
       if (s.remaining <= 0) handleTimeout();
     }, 1000);
   }
@@ -647,7 +657,7 @@
     setText("comboMeter", s.combo);
     setText("delayValue", `${s.delay}分`);
     setText("scoreValue", s.score);
-    setText("timeValue", `${s.remaining}秒`);
+    setText("timeValue", formatRemainingTime(s));
   }
 
   function setFeedback(text, type) {
@@ -939,6 +949,7 @@
       });
     });
     document.getElementById("testSound").addEventListener("click", () => {
+      unlockAudioPlayback();
       playEffect("departureBell");
       setTimeout(() => playEffect("correct"), 450);
       speakAnnouncement("correct", "default", {});
@@ -1030,17 +1041,65 @@
     playAudioFile(src, "effect");
   }
 
+  function unlockAudioPlayback() {
+    audioUnlocked = true;
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!audioContext && AudioContextClass) audioContext = new AudioContextClass();
+      if (audioContext?.state === "suspended") audioContext.resume();
+    } catch (error) {
+      console.warn("audio unlock failed", error);
+    }
+  }
+
   function playAudioFile(src, type = "effect") {
     const settings = saveData.soundSettings;
     if (!settings.soundEnabled) return;
     if (type === "announcement" && !settings.announcementEnabled) return;
     if (type === "effect" && !settings.effectEnabled) return;
+
     const audio = new Audio(src);
     const typeVolume = type === "announcement" ? settings.announcementVolume : settings.effectVolume;
+    audio.preload = "auto";
     audio.volume = clamp(settings.masterVolume * typeVolume, 0, 1);
-    audio.play().catch(() => {
-      // ブラウザの自動再生制限や音源差し替え前の欠落を許容する。
-    });
+    activeAudioSet.add(audio);
+    const cleanup = () => activeAudioSet.delete(audio);
+    audio.addEventListener("ended", cleanup, { once: true });
+    audio.addEventListener("error", cleanup, { once: true });
+
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch((error) => {
+        cleanup();
+        console.warn("audio play failed", src, error);
+        playFallbackTone(type);
+      });
+    }
+  }
+
+  function playFallbackTone(type = "effect") {
+    const settings = saveData.soundSettings;
+    const typeVolume = type === "announcement" ? settings.announcementVolume : settings.effectVolume;
+    const volume = clamp(settings.masterVolume * typeVolume, 0, 1);
+    if (!volume) return;
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!audioContext && AudioContextClass) audioContext = new AudioContextClass();
+      if (!audioContext) return;
+      if (audioContext.state === "suspended") audioContext.resume();
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = type === "announcement" ? "triangle" : "sine";
+      oscillator.frequency.value = type === "announcement" ? 660 : 880;
+      gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * 0.25), audioContext.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.22);
+      oscillator.connect(gain).connect(audioContext.destination);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.24);
+    } catch (error) {
+      console.warn("fallback tone failed", error);
+    }
   }
 
   function startTrainLoop() {
@@ -1049,8 +1108,12 @@
     stopTrainLoop();
     trainLoopAudio = new Audio(SOUND_FILES.trainLoop);
     trainLoopAudio.loop = true;
+    trainLoopAudio.preload = "auto";
     trainLoopAudio.volume = clamp(settings.masterVolume * settings.trainVolume, 0, 1);
-    trainLoopAudio.play().catch(() => {});
+    const playPromise = trainLoopAudio.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch((error) => console.warn("train loop failed", error));
+    }
   }
 
   function stopTrainLoop() {
@@ -1064,12 +1127,34 @@
   function buildHintText(problem, session) {
     if (!problem) return "";
     if (session?.line.source === "listening" || problem.type === "listening") {
-      return session?.hintShown ? (problem.note || "ヒントはありません。") : "聞き取り路線：必要ならヒント表示を使えます。";
+      return session?.hintShown ? (problem.note || problem.hint || "ヒントはありません。") : "聞き取り路線：必要ならヒント表示を使えます。";
     }
     const primary = problem.answers[0] || "";
     const alt = problem.answers.slice(1, 4).join(" / ");
     return `${primary}${alt ? ` / ${alt} どちらでもOK` : ""}${problem.note ? `｜${problem.note}` : ""}`;
   }
+
+  function hasTimeLimit(line) {
+    return Number.isFinite(line?.timeLimit) && line.timeLimit > 0;
+  }
+
+  function getInitialRemaining(line) {
+    return hasTimeLimit(line) ? line.timeLimit : null;
+  }
+
+  function formatLineTimeLimit(line) {
+    return hasTimeLimit(line) ? `${line.timeLimit}秒` : "制限なし";
+  }
+
+  function formatRemainingTime(session) {
+    return hasTimeLimit(session?.line) ? `${session.remaining}秒` : "制限なし";
+  }
+
+  function showInitialHint(problem, session) {
+    const hint = document.getElementById("answerHint");
+    if (hint) hint.textContent = buildHintText(problem, session);
+  }
+
 
 
   function renderRouteMap(session) {
