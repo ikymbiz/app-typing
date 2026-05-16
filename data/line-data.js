@@ -15,8 +15,8 @@ const TITLE_TABLE = [
 
 const LINE_DATA = [
   {
-    id: "kanauchi", name: "かなうち本線", unlockLevel: 1, source: "kana", stationCount: 12, timeLimit: 8,
-    difficulty: "★☆☆☆☆", role: "かな1文字の基本練習", description: "かな1文字をローマ字で入力する基本路線。shi / si などの別表記も学べます。",
+    id: "kanauchi", name: "かなうち本線", unlockLevel: 1, source: "kana", stationCount: 12, timeLimit: null,
+    difficulty: "★☆☆☆☆", role: "かな1文字の基本練習", description: "かな1文字をローマ字で入力する練習用の基本路線。時間制限なしで、shi / si などの別表記も学べます。",
     startAnnouncement: "kanauchi", clearBadge: "かなうち本線制覇", icon: "🚃"
   },
   {
